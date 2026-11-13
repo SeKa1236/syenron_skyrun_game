@@ -1,0 +1,713 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>神龍スカイラン - 無限ランゲーム</title>
+<style>
+  body {
+    margin: 0;
+    padding: 0;
+    background-color: #1a1a2e;
+    color: #fff;
+    font-family: 'Courier New', Consolas, monospace;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    overflow: hidden;
+    user-select: none;
+  }
+  #game-container {
+    position: relative;
+    width: 800px;
+    height: 450px;
+    box-shadow: 0 0 20px rgba(0, 0, 0, 0.8);
+    border: 4px solid #4a4e69;
+    background-color: #5c94fc; /* 青空の背景 */
+  }
+  canvas {
+    display: block;
+    image-rendering: pixelated; /* ドット絵をくっきりさせる */
+  }
+  .overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(15, 23, 42, 0.85);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    padding: 20px;
+    box-sizing: border-box;
+  }
+  .hidden {
+    display: none !important;
+  }
+  h1 {
+    font-size: 36px;
+    color: #ffd166;
+    text-shadow: 3px 3px #d90429;
+    margin: 0 0 10px 0;
+  }
+  h2 {
+    font-size: 28px;
+    color: #06d6a0;
+    margin: 0 0 15px 0;
+  }
+  .controls-box {
+    background: rgba(255, 255, 255, 0.1);
+    border: 2px solid #8d99ae;
+    border-radius: 8px;
+    padding: 10px 20px;
+    margin-bottom: 15px;
+    font-size: 14px;
+    line-height: 1.6;
+  }
+  .input-group {
+    margin-bottom: 15px;
+  }
+  input[type="text"] {
+    padding: 8px 12px;
+    font-size: 16px;
+    border-radius: 4px;
+    border: 2px solid #ffd166;
+    background: #2b2d42;
+    color: #fff;
+    font-family: inherit;
+    text-align: center;
+  }
+  button {
+    padding: 10px 24px;
+    font-size: 18px;
+    font-weight: bold;
+    color: #1a1a2e;
+    background-color: #ffd166;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-family: inherit;
+    margin: 5px;
+    transition: transform 0.1s, background-color 0.2s;
+  }
+  button:hover {
+    background-color: #ffbe0b;
+    transform: scale(1.05);
+  }
+  .ranking-box {
+    width: 320px;
+    background: rgba(0, 0, 0, 0.5);
+    border: 1px solid #ffd166;
+    border-radius: 6px;
+    padding: 10px;
+    margin-top: 10px;
+  }
+  .ranking-box h3 {
+    margin: 0 0 8px 0;
+    font-size: 16px;
+    color: #ffd166;
+  }
+  #ranking-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    font-size: 14px;
+    text-align: left;
+  }
+  #ranking-list li {
+    display: flex;
+    justify-content: space-between;
+    padding: 3px 8px;
+    border-bottom: 1px dashed rgba(255,255,255,0.2);
+  }
+</style>
+</head>
+<body>
+
+<div id="game-container">
+  <canvas id="gameCanvas" width="800" height="450"></canvas>
+
+  <!-- ホーム画面 -->
+  <div id="home-screen" class="overlay">
+    <h1>🐉 神龍スカイラン 🐉</h1>
+    <div class="controls-box">
+      <strong>【操作方法】</strong><br>
+      ⬆️⬇️⬅️➡️ 矢印キー：空を自由に移動<br>
+      <strong>Escキー</strong>：一時停止（ポーズ）<br>
+      <span style="color:#a8dadc;">※白い雲は当たってもOK！雷雲・飛行機・気球・野球ボールを避けよう！</span>
+    </div>
+    <div class="input-group">
+      <label for="player-name">プレイヤー名: </label>
+      <input type="text" id="player-name" maxlength="10" placeholder="ななしの龍" value="プレイヤー1">
+    </div>
+    <button id="start-btn">ゲームスタート</button>
+
+    <div class="ranking-box">
+      <h3>🏆 ハイスコアランキング (生存タイム)</h3>
+      <ul id="ranking-list"></ul>
+    </div>
+  </div>
+
+  <!-- 一時停止（ポーズ）画面 -->
+  <div id="pause-screen" class="overlay hidden">
+    <h2>⏸ 一時停止中 (PAUSE)</h2>
+    <p>Escキー または 下のボタンで選択してください</p>
+    <div>
+      <button id="resume-btn">そのまま続ける</button>
+      <button id="home-from-pause-btn" style="background-color:#ef476f; color:#fff;">ホーム画面に戻る</button>
+    </div>
+  </div>
+
+  <!-- ゲームオーバー画面 -->
+  <div id="gameover-screen" class="overlay hidden">
+    <h1 style="color:#ef476f;">GAME OVER</h1>
+    <p id="final-score-text" style="font-size: 22px; margin: 10px 0;"></p>
+    <div>
+      <button id="retry-btn">もう一度遊ぶ</button>
+      <button id="home-from-over-btn" style="background-color:#8d99ae; color:#fff;">ホーム画面へ</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+
+// ==========================================
+// 1. ドット絵データ定義（プログラムで生成）
+// ==========================================
+const PALETTE = {
+  '.': null,       // 透明
+  'G': '#2b9348',  // 龍の体（緑）
+  'L': '#55a630',  // 龍の体（明緑）
+  'Y': '#ffd166',  // 龍のツノ・ヒゲ・腹（金・黄）
+  'R': '#d90429',  // 龍の目・ハート・ボール縫い目（赤）
+  'W': '#ffffff',  // 白（雲・飛行機・ボール・目）
+  'S': '#caf0f8',  // 雲の影・飛行機の窓
+  'D': '#343a40',  // 雷雲（濃いグレー）
+  'M': '#6c757d',  // 雷雲の影・割れたハート（灰）
+  'B': '#0077b6',  // 飛行機・気球の青
+  'O': '#f77f00',  // 気球のオレンジ
+  'K': '#4a3018',  // 気球のカゴ（茶）
+  'P': '#ff99ac'   // ハートのハイライト
+};
+
+// 神龍（東洋の龍・横向き）16x10
+const SPRITE_DRAGON = [
+  "....Y......Y....",
+  "...Y.G....G.Y...",
+  "....GGLLLLGG..YY",
+  ".GG..GGGGGG..GRW",
+  "GLLGGGGGGGGGGGGG",
+  ".GG..YYYYYYYYYY.",
+  "....G........Y..",
+  "...G..........Y."
+];
+
+// 普通の雲（当たってもOK）14x8
+const SPRITE_CLOUD = [
+  "....WWWWWW....",
+  "..WWWWWWWWWW..",
+  ".WWWWWWWWWWWW.",
+  "WWWWWWWWWWWWWW",
+  "WWWWWWWWWWWWWW",
+  ".SSSSSSSSSSSS.",
+  "..SSSSSSSSSS.."
+];
+
+// 雷雲（当たるとダメ・イナズマ付き）14x11
+const SPRITE_THUNDER = [
+  "....DDDDDD....",
+  "..DDDDDDDDDD..",
+  ".DDDDDDDDDDDD.",
+  "DDDDDDDDDDDDDD",
+  "MMMMMMMMMMMMMM",
+  ".MMMMMMMMMMMM.",
+  ".....YYY......",
+  "....YYY.......",
+  ".....YYY......",
+  "....YY........",
+  "...Y.........."
+];
+
+// 飛行機 16x8
+const SPRITE_PLANE = [
+  ".......BB.......",
+  "......BBBB......",
+  "....WWWWWWWW....",
+  "..WWBWBWBWBWWW..",
+  "BWWWWWWWWWWWWWW.",
+  "BBWWWWWWWWWWWWWW",
+  "....BBBBBBBB....",
+  ".....BBBBBB....."
+];
+
+// 気球 12x14
+const SPRITE_BALLOON = [
+  "....OOOO....",
+  "..OOBBBBOO..",
+  ".OOBBBBBBOO.",
+  "OOBBBBBBBBOO",
+  "OOBBBBBBBBOO",
+  ".OOBBBBBBOO.",
+  "..OOBBBBOO..",
+  "...OOBBOO...",
+  "....OOOO....",
+  ".....YY.....",
+  "....K..K....",
+  "....KKKK....",
+  "....KKKK...."
+];
+
+// 野球ボール 8x8
+const SPRITE_BASEBALL = [
+  "..WWWW..",
+  ".WWRRWW.",
+  "WRWWWWWR",
+  "WRWWWWWR",
+  "WRWWWWWR",
+  "WRWWWWWR",
+  ".WWRRWW.",
+  "..WWWW.."
+];
+
+// 赤いハート（残機あり）9x8
+const SPRITE_HEART_FULL = [
+  ".RR...RR.",
+  "RPRR.RRRR",
+  "RPRRRRRRR",
+  "RRRRRRRRR",
+  ".RRRRRRR.",
+  "..RRRRR..",
+  "...RRR...",
+  "....R...."
+];
+
+// 灰色の割れたハート（残機なし）9x8
+const SPRITE_HEART_BROKEN = [
+  ".MM...MM.",
+  "MMMM.MMMM",
+  "MMM.MMMMM",
+  "MMMM.MMMM",
+  ".MM.MMMM.",
+  "..MM.MM..",
+  "...M.M...",
+  "....M...."
+];
+
+// ドット絵を描画する汎用関数
+function drawSprite(sprite, x, y, scale, flipX = false) {
+  const rows = sprite.length;
+  const cols = sprite[0].length;
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const char = sprite[r][c];
+      const color = PALETTE[char];
+      if (color) {
+        ctx.fillStyle = color;
+        const drawX = flipX ? x + (cols - 1 - c) * scale : x + c * scale;
+        const drawY = y + r * scale;
+        ctx.fillRect(Math.floor(drawX), Math.floor(drawY), scale, scale);
+      }
+    }
+  }
+}
+
+// ==========================================
+// 2. ゲーム状態管理 & 変数
+// ==========================================
+let gameState = 'HOME'; // 'HOME', 'PLAYING', 'PAUSED', 'GAMEOVER'
+let lastTime = 0;
+let elapsedTime = 0; // 秒単位の生存タイム
+let gameSpeed = 220; // 基本スクロール速度 (px/sec)
+
+// プレイヤー（神龍）
+const player = {
+  x: 80,
+  y: 200,
+  width: 64,  // 16 * 4
+  height: 32, // 8 * 4
+  speed: 280,
+  lives: 3,
+  maxLives: 3,
+  invincibleTimer: 0 // 無敵時間（秒）
+};
+
+// キー入力状態
+const keys = {
+  ArrowUp: false,
+  ArrowDown: false,
+  ArrowLeft: false,
+  ArrowRight: false
+};
+
+// オブジェクト配列
+let obstacles = []; // 障害物（飛行機、雷雲、気球、野球ボール）
+let clouds = [];    // 普通の雲（装飾兼フェイク・当たってもOK）
+let spawnTimer = 0;
+let cloudTimer = 0;
+
+// ==========================================
+// 3. ランキング機能 (localStorage)
+// ==========================================
+const STORAGE_KEY = 'shenron_sky_run_ranking';
+
+function getRanking() {
+  const data = localStorage.getItem(STORAGE_KEY);
+  return data ? JSON.parse(data) : [
+    { name: 'シェンロン', time: 45.20 },
+    { name: 'スカイウォーカー', time: 30.50 },
+    { name: 'クラウド', time: 15.80 }
+  ];
+}
+
+function saveScore(name, time) {
+  const ranking = getRanking();
+  ranking.push({ name: name || 'ななしの龍', time: parseFloat(time.toFixed(2)) });
+  ranking.sort((a, b) => b.time - a.time); // タイムが長い順
+  const top5 = ranking.slice(0, 5);
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(top5));
+  renderRanking();
+}
+
+function renderRanking() {
+  const list = document.getElementById('ranking-list');
+  const ranking = getRanking();
+  list.innerHTML = '';
+  ranking.forEach((entry, index) => {
+    const li = document.createElement('li');
+    li.innerHTML = `<span>${index + 1}位. ${escapeHTML(entry.name)}</span><span>${entry.time.toFixed(2)} 秒</span>`;
+    list.appendChild(li);
+  });
+}
+
+function escapeHTML(str) {
+  return str.replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
+}
+
+// ==========================================
+// 4. ゲームの初期化・制御
+// ==========================================
+function initGame() {
+  player.x = 80;
+  player.y = canvas.height / 2 - player.height / 2;
+  player.lives = player.maxLives;
+  player.invincibleTimer = 0;
+
+  elapsedTime = 0;
+  gameSpeed = 220;
+  obstacles = [];
+  clouds = [];
+  spawnTimer = 0;
+  cloudTimer = 0;
+
+  // 初期の普通の雲をいくつか配置
+  for (let i = 0; i < 5; i++) {
+    clouds.push({
+      x: Math.random() * canvas.width,
+      y: Math.random() * (canvas.height - 60),
+      scale: 4,
+      speedRatio: 0.6 + Math.random() * 0.4
+    });
+  }
+}
+
+function setScreen(state) {
+  gameState = state;
+  document.getElementById('home-screen').classList.toggle('hidden', state !== 'HOME');
+  document.getElementById('pause-screen').classList.toggle('hidden', state !== 'PAUSED');
+  document.getElementById('gameover-screen').classList.toggle('hidden', state !== 'GAMEOVER');
+}
+
+// ボタンイベント
+document.getElementById('start-btn').addEventListener('click', () => {
+  initGame();
+  setScreen('PLAYING');
+  lastTime = performance.now();
+  requestAnimationFrame(gameLoop);
+});
+
+document.getElementById('resume-btn').addEventListener('click', () => {
+  if (gameState === 'PAUSED') {
+    setScreen('PLAYING');
+    lastTime = performance.now();
+    requestAnimationFrame(gameLoop);
+  }
+});
+
+document.getElementById('home-from-pause-btn').addEventListener('click', () => {
+  renderRanking();
+  setScreen('HOME');
+});
+
+document.getElementById('retry-btn').addEventListener('click', () => {
+  initGame();
+  setScreen('PLAYING');
+  lastTime = performance.now();
+  requestAnimationFrame(gameLoop);
+});
+
+document.getElementById('home-from-over-btn').addEventListener('click', () => {
+  renderRanking();
+  setScreen('HOME');
+});
+
+// キーボードイベント
+window.addEventListener('keydown', (e) => {
+  if (e.key in keys) {
+    keys[e.key] = true;
+    e.preventDefault();
+  }
+  // Escキーで一時停止 / 再開
+  if (e.key === 'Escape') {
+    if (gameState === 'PLAYING') {
+      setScreen('PAUSED');
+    } else if (gameState === 'PAUSED') {
+      setScreen('PLAYING');
+      lastTime = performance.now();
+      requestAnimationFrame(gameLoop);
+    }
+  }
+});
+
+window.addEventListener('keyup', (e) => {
+  if (e.key in keys) {
+    keys[e.key] = false;
+  }
+});
+
+// ==========================================
+// 5. 障害物・雲の生成ロジック
+// ==========================================
+function spawnObstacle() {
+  const types = ['PLANE', 'THUNDER', 'BALLOON', 'BASEBALL'];
+  const type = types[Math.floor(Math.random() * types.length)];
+
+  let obs = {
+    type: type,
+    x: canvas.width + 20,
+    y: 0,
+    width: 0,
+    height: 0,
+    speedMultiplier: 1.0,
+    vy: 0
+  };
+
+  if (type === 'PLANE') {
+    obs.width = 16 * 3.5;
+    obs.height = 8 * 3.5;
+    obs.speedMultiplier = 1.3; // 飛行機は少し速い
+  } else if (type === 'THUNDER') {
+    obs.width = 14 * 4;
+    obs.height = 11 * 4;
+    obs.speedMultiplier = 1.0;
+  } else if (type === 'BALLOON') {
+    obs.width = 12 * 3.5;
+    obs.height = 14 * 3.5;
+    obs.speedMultiplier = 0.85; // 気球は少しゆっくり
+    obs.vy = (Math.random() < 0.5 ? 1 : -1) * 30; // 上下にふわふわ動く
+  } else if (type === 'BASEBALL') {
+    obs.width = 8 * 3.5;
+    obs.height = 8 * 3.5;
+    obs.speedMultiplier = 1.8; // 野球ボールは速い！
+    obs.vy = (Math.random() - 0.5) * 100; // 少し斜めに飛んでくる
+  }
+
+  // 画面の上下端にはみ出さない位置に配置（上部のUIスペースを少し空ける）
+  obs.y = 45 + Math.random() * (canvas.height - obs.height - 55);
+  obstacles.push(obs);
+}
+
+function spawnNormalCloud() {
+  clouds.push({
+    x: canvas.width + 20,
+    y: 40 + Math.random() * (canvas.height - 80),
+    scale: 3.5 + Math.random() * 1.5,
+    speedRatio: 0.7 + Math.random() * 0.4
+  });
+}
+
+// ==========================================
+// 6. 更新処理 (Update)
+// ==========================================
+function update(dt) {
+  // タイム加算と難易度（速度）上昇
+  elapsedTime += dt;
+  gameSpeed = 220 + elapsedTime * 4.5; // 時間が経つほど速くなる
+
+  // 無敵時間の減少
+  if (player.invincibleTimer > 0) {
+    player.invincibleTimer -= dt;
+    if (player.invincibleTimer < 0) player.invincibleTimer = 0;
+  }
+
+  // プレイヤー移動
+  if (keys.ArrowUp) player.y -= player.speed * dt;
+  if (keys.ArrowDown) player.y += player.speed * dt;
+  if (keys.ArrowLeft) player.x -= player.speed * dt;
+  if (keys.ArrowRight) player.x += player.speed * dt;
+
+  // 画面外に出ないよう制限
+  player.x = Math.max(10, Math.min(canvas.width - player.width - 10, player.x));
+  player.y = Math.max(45, Math.min(canvas.height - player.height - 10, player.y));
+
+  // 普通の雲（触れてOK）の生成と移動
+  cloudTimer -= dt;
+  if (cloudTimer <= 0) {
+    spawnNormalCloud();
+    cloudTimer = 1.2 + Math.random() * 1.5;
+  }
+  for (let i = clouds.length - 1; i >= 0; i--) {
+    clouds[i].x -= gameSpeed * clouds[i].speedRatio * dt;
+    if (clouds[i].x < -100) {
+      clouds.splice(i, 1);
+    }
+  }
+
+  // 障害物の生成と移動
+  spawnTimer -= dt;
+  if (spawnTimer <= 0) {
+    spawnObstacle();
+    // 時間が経つと出現間隔も少しずつ短くなる
+    const minInterval = Math.max(0.45, 1.3 - elapsedTime * 0.015);
+    spawnTimer = minInterval + Math.random() * 0.6;
+  }
+
+  for (let i = obstacles.length - 1; i >= 0; i--) {
+    const obs = obstacles[i];
+    obs.x -= gameSpeed * obs.speedMultiplier * dt;
+    obs.y += obs.vy * dt;
+
+    // 気球やボールが上下端で跳ね返る処理
+    if (obs.y < 45 || obs.y + obs.height > canvas.height - 5) {
+      obs.vy *= -1;
+    }
+
+    // 当たり判定（無敵時間中でなければチェック）
+    if (player.invincibleTimer <= 0) {
+      // 遊びやすさのため判定を少しだけ甘め（内側に6px）に設定
+      const pad = 6;
+      if (
+        player.x + pad < obs.x + obs.width - pad &&
+        player.x + player.width - pad > obs.x + pad &&
+        player.y + pad < obs.y + obs.height - pad &&
+        player.y + player.height - pad > obs.y + pad
+      ) {
+        // 衝突発生！
+        player.lives--;
+        obstacles.splice(i, 1); // ぶつかった障害物は消える
+
+        if (player.lives <= 0) {
+          // ゲームオーバー処理
+          const playerName = document.getElementById('player-name').value.trim();
+          saveScore(playerName, elapsedTime);
+          document.getElementById('final-score-text').textContent =
+            `${playerName || 'ななしの龍'} の記録: ${elapsedTime.toFixed(2)} 秒`;
+          setScreen('GAMEOVER');
+          return;
+        } else {
+          // 3秒間の無敵時間を付与
+          player.invincibleTimer = 3.0;
+        }
+        continue;
+      }
+    }
+
+    // 画面左外に出たら削除
+    if (obs.x + obs.width < -50) {
+      obstacles.splice(i, 1);
+    }
+  }
+}
+
+// ==========================================
+// 7. 描画処理 (Render)
+// ==========================================
+function draw() {
+  // 背景（青空）クリア
+  ctx.fillStyle = '#5c94fc';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // 1. 普通の白い雲を描画（プレイヤーより奥・または同じ空間で触れてOK）
+  clouds.forEach(c => {
+    drawSprite(SPRITE_CLOUD, c.x, c.y, c.scale);
+  });
+
+  // 2. プレイヤー（神龍）を描画
+  // 無敵時間中は0.1秒間隔で点滅させる
+  const isBlinking = player.invincibleTimer > 0 && Math.floor(player.invincibleTimer * 15) % 2 === 0;
+  if (!isBlinking) {
+    // 少し上下にうねるアニメーション
+    const waveY = Math.sin(elapsedTime * 10) * 3;
+    drawSprite(SPRITE_DRAGON, player.x, player.y + waveY, 4);
+  }
+
+  // 3. 障害物を描画
+  obstacles.forEach(obs => {
+    if (obs.type === 'PLANE') {
+      drawSprite(SPRITE_PLANE, obs.x, obs.y, 3.5);
+    } else if (obs.type === 'THUNDER') {
+      drawSprite(SPRITE_THUNDER, obs.x, obs.y, 4);
+    } else if (obs.type === 'BALLOON') {
+      drawSprite(SPRITE_BALLOON, obs.x, obs.y, 3.5);
+    } else if (obs.type === 'BASEBALL') {
+      drawSprite(SPRITE_BASEBALL, obs.x, obs.y, 3.5);
+    }
+  });
+
+  // 4. UIヘッダー（タイムと残機ハート）
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+  ctx.fillRect(0, 0, canvas.width, 42);
+
+  // 左上：タイム表示
+  ctx.fillStyle = '#ffffff';
+  ctx.font = 'bold 20px "Courier New", monospace';
+  ctx.textAlign = 'left';
+  ctx.fillText(`TIME: ${elapsedTime.toFixed(2)}s`, 15, 28);
+
+  // 無敵時間中のメッセージ表示
+  if (player.invincibleTimer > 0) {
+    ctx.fillStyle = '#ffd166';
+    ctx.font = 'bold 16px "Courier New", monospace';
+    ctx.fillText(`無敵時間: ${player.invincibleTimer.toFixed(1)}s`, 190, 27);
+  }
+
+  // 右上：残機（ハート3つ）
+  for (let i = 0; i < player.maxLives; i++) {
+    const heartX = canvas.width - 135 + i * 42;
+    const heartY = 7;
+    if (i < player.lives) {
+      drawSprite(SPRITE_HEART_FULL, heartX, heartY, 3.5);
+    } else {
+      drawSprite(SPRITE_HEART_BROKEN, heartX, heartY, 3.5);
+    }
+  }
+}
+
+// ==========================================
+// 8. メインループ
+// ==========================================
+function gameLoop(timestamp) {
+  if (gameState !== 'PLAYING') return;
+
+  const dt = (timestamp - lastTime) / 1000;
+  lastTime = timestamp;
+
+  // タブ切り替えなどでdtが極端に大きくなった場合の安全対策
+  if (dt < 0.1) {
+    update(dt);
+  }
+  draw();
+
+  requestAnimationFrame(gameLoop);
+}
+
+// 初回起動時のランキング描画と初期画面描画
+renderRanking();
+draw();
+</script>
+</body>
+</html>
